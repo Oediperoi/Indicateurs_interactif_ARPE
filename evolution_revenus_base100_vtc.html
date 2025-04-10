@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Évolution des revenus VTC (Indice base 100)</title>
+    
+    <!-- Import de la police Marianne -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.7.2/dist/dsfr.min.css">
+    
+    <!-- Plotly JS pour les graphiques -->
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+            background-color: #ffffff;
+            overscroll-behavior: none;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        #graphique {
+            width: 100%;
+            height: 600px;
+            margin: 0 auto;
+            touch-action: pan-y pinch-zoom;
+        }
+        
+        /* Style général */
+        .gtitle {
+            font-weight: 700 !important;
+            font-size: 1.4em !important;
+            font-family: 'Marianne', Georgia, serif !important;
+            color: #222 !important;
+        }
+        
+        /* Sous-titres des sections */
+        .annotation-text {
+            font-weight: 600 !important;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif !important;
+        }
+        
+        /* Navigation tabs pour filtrer les plateformes */
+        .graph-navigation {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eaeaea;
+            padding-bottom: 10px;
+        }
+        
+        .graph-navigation button {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 0 5px;
+            color: #333;
+            border: none;
+            background-color: transparent;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+        }
+        
+        .graph-navigation button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .graph-navigation button.active {
+            background-color: #0063CB;
+            color: white;
+        }
+        
+        /* Styles pour les boutons de mode du graphique */
+        .mode-buttons {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            margin-bottom: 10px;
+        }
+        
+        .mode-button {
+            padding: 8px 16px;
+            margin: 0 4px;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            background-color: rgba(245, 245, 245, 0.95);
+            color: #333;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .mode-button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .mode-button.active {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Ajout d'instructions pour le mobile */
+        .instructions {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        /* Style pour mobile */
+        @media (max-width: 768px) {
+            #graphique {
+                height: 500px;
+            }
+            
+            .gtitle {
+                font-size: 1.2em !important;
+            }
+            
+            .instructions {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="graph-navigation">
+            <button type="button" id="btn-all" class="active">Toutes plateformes</button>
+            <button type="button" id="btn-participants">Participants au dialogue social</button>
+            <button type="button" id="btn-non-participants">Non participants</button>
+        </div>
+        
+        <!-- Boutons de mode (ajusté/nominal/comparaison) -->
+        <div class="mode-buttons" id="mode-buttons">
+            <button class="mode-button active" data-mode="ajuste">Revenu ajusté à l'inflation</button>
+            <button class="mode-button" data-mode="nominal">Revenu nominal</button>
+            <button class="mode-button" data-mode="les_deux">Comparaison des deux</button>
+        </div>
+        
+        <div id="graphique"></div>
+        
+        <div class="instructions">
+            Utilisez deux doigts pour zoomer et faire défiler le graphique. Touchez les éléments pour plus de détails.
+        </div>
+    </div>
+    
+    <script>
+        // Configuration des plateformes et couleurs
+        const colors_vtc = {
+            'ALLO CAB':   '#556B2F',  // Vert profond
+            'BLACKLANE':  '#1C1C1C',  // Noir riche
+            'BOLT':       '#007C91',  // Bleu profond
+            'CAO CAO':    '#00ACC1',  // Bleu-vert clair
+            'FREENOW':    '#90A4AE',  // Gris-bleu
+            'HEETCH':     '#6A1B9A',  // Violet profond
+            'LE CAB':     '#B74E23',  // Orange-brun
+            'MARCEL':     '#7B68EE',  // Violet
+            'SIXT RIDE':  '#FF8C00',  // Orange
+            'UBER':       '#D4A017',  // Or
+            'MYSAM':      '#808180'   // Gris
+        };
+
+        // Définir les groupes de plateformes
+        const PF_participant_au_dialogue_social = ['ALLO CAB', 'BOLT', 'CAO CAO', 'FREENOW', 'HEETCH', 'LE CAB', 'MARCEL', 'UBER'];
+        const PF_non_participant_au_dialogue_social = ['BLACKLANE', 'MYSAM', 'SIXT RIDE'];
+
+        // Données d'inflation (reprises du code Python)
+        const inflation_indices = [
+            {annee: 2020, inflation_pct: 0.5, indice: 100.0},
+            {annee: 2021, inflation_pct: 1.6, indice: 101.6},
+            {annee: 2022, inflation_pct: 5.2, indice: 106.9},
+            {annee: 2023, inflation_pct: 4.9, indice: 112.1},
+            {annee: 2024, inflation_pct: 2.0, indice: 114.4}
+        ];
+        
+        // Conversion pour un accès facile
+        const inflation = {};
+        inflation_indices.forEach(item => {
+            inflation[item.annee] = item.indice;
+        });
+
+        // Données de revenus par année directement des fichiers CSV
+        const donnees_reelles = [
+            // ALLO CAB
+            { plateforme: 'ALLO CAB', annees: [2021, 2022, 2023, 2024], revenus: [33.4, 33.67, 37.04, 38.81], revenu_horaire_brut: [74.78, 81.13, 86.14, 88.2], revenu_horaire_ajuste: [74.78, 77.12, 78.06, 78.36] },
+            // BLACKLANE
+            { plateforme: 'BLACKLANE', annees: [2021, 2022, 2023, 2024], revenus: [78.51, 94.88, 96.56, null], revenu_horaire_brut: [87.35, 103.83, 108.13, null], revenu_horaire_ajuste: [87.35, 98.69, 97.98, null] },
+            // BOLT
+            { plateforme: 'BOLT', annees: [2021, 2022, 2023, 2024], revenus: [16.05, 17.12, 17.98, 16.47], revenu_horaire_brut: [43.97, 50.53, 49.6, 44.61], revenu_horaire_ajuste: [43.97, 48.03, 44.95, 39.64] },
+            // CAO CAO
+            { plateforme: 'CAO CAO', annees: [2021, 2022, 2023, 2024], revenus: [15.0, 17.82, 23.86, 28.56], revenu_horaire_brut: [40.25, 49.14, 55.49, 57.7], revenu_horaire_ajuste: [40.25, 46.71, 50.28, 51.26] },
+            // FREENOW
+            { plateforme: 'FREENOW', annees: [2021, 2022, 2023, 2024], revenus: [15.5, 17.0, 12.2, 23.0], revenu_horaire_brut: [43.66, 46.36, 30.37, 51.88], revenu_horaire_ajuste: [43.66, 44.07, 27.52, 46.09] },
+            // HEETCH
+            { plateforme: 'HEETCH', annees: [2021, 2022, 2023, 2024], revenus: [14.3, 15.4, 12.9, 10.5], revenu_horaire_brut: [40.86, 40.17, 33.65, 27.39], revenu_horaire_ajuste: [40.86, 38.19, 30.49, 24.33] },
+            // LE CAB
+            { plateforme: 'LE CAB', annees: [2021, 2022, 2023, 2024], revenus: [null, 38.5, 37.5, 38.6], revenu_horaire_brut: [null, 70.0, 66.18, 68.12], revenu_horaire_ajuste: [null, 66.54, 59.97, 60.52] },
+            // MARCEL
+            { plateforme: 'MARCEL', annees: [2021, 2022, 2023, 2024], revenus: [null, 38.2, 38.3, null], revenu_horaire_brut: [null, 69.45, 69.64, null], revenu_horaire_ajuste: [null, 66.02, 63.1, null] },
+            // MYSAM
+            { plateforme: 'MYSAM', annees: [2021, 2022, 2023, 2024], revenus: [null, null, null, 42.21], revenu_horaire_brut: [null, null, null, 123.6], revenu_horaire_ajuste: [null, null, null, 109.81] },
+            // SIXT RIDE
+            { plateforme: 'SIXT RIDE', annees: [2021, 2022, 2023, 2024], revenus: [null, null, 82.94, 74.09], revenu_horaire_brut: [null, null, 107.71, 102.9], revenu_horaire_ajuste: [null, null, 97.61, 91.42] },
+            // UBER
+            { plateforme: 'UBER', annees: [2021, 2022, 2023, 2024], revenus: [15.4, 17.0, 18.3, 17.5], revenu_horaire_brut: [46.2, 49.76, 52.04, 49.3], revenu_horaire_ajuste: [46.2, 47.3, 47.16, 43.79] }
+        ];
+
+        // Variables globales pour l'état du graphique
+        let currentFilter = 'all';
+        let currentMode = 'ajuste';
+        let graphDiv = document.getElementById('graphique');
+
+        // Fonction pour créer les traces pour le graphique
+        function creerTraces(mode, filtre = 'all') {
+            const traces = [];
+            
+            // Sélectionner les plateformes à afficher selon le filtre
+            let plateformes_a_afficher = [];
+            if (filtre === 'all') {
+                plateformes_a_afficher = [...PF_participant_au_dialogue_social, ...PF_non_participant_au_dialogue_social];
+            } else if (filtre === 'participants') {
+                plateformes_a_afficher = PF_participant_au_dialogue_social;
+            } else if (filtre === 'non-participants') {
+                plateformes_a_afficher = PF_non_participant_au_dialogue_social;
+            }
+            
+            // Créer les traces pour chaque plateforme
+            for (const data of donnees_reelles) {
+                // Vérifier si la plateforme doit être affichée
+                if (!plateformes_a_afficher.includes(data.plateforme)) {
+                    continue;
+                }
+                
+                // Filtrer les années avec des données valides
+                const annees_valides = [];
+                const revenus_valides = [];
+                const rev_hor_brut_valides = [];
+                const rev_hor_ajuste_valides = [];
+                
+                data.annees.forEach((annee, idx) => {
+                    if (data.revenus[idx] !== null) {
+                        annees_valides.push(annee);
+                        revenus_valides.push(data.revenus[idx]);
+                        rev_hor_brut_valides.push(data.revenu_horaire_brut[idx]);
+                        rev_hor_ajuste_valides.push(data.revenu_horaire_ajuste[idx]);
+                    }
+                });
+                
+                // Continuer seulement s'il y a des données valides
+                if (annees_valides.length === 0) continue;
+                
+                const color = colors_vtc[data.plateforme] || '#000000';
+                
+                // Groupe pour la légende
+                const groupe = PF_participant_au_dialogue_social.includes(data.plateforme) 
+                    ? "Participant au dialogue social" 
+                    : "Non participant au dialogue social";
+                
+                if (mode === 'ajuste' || mode === 'les_deux') {
+                    // Utiliser directement les valeurs ajustées (revenu_horaire_ajuste) 
+                    // et convertir en base 100
+                    const premiere_valeur_ajustee = rev_hor_ajuste_valides[0];
+                    const valeurs_ajustees = rev_hor_ajuste_valides.map(val => (val / premiere_valeur_ajustee) * 100);
+                    
+                    traces.push({
+                        x: annees_valides,
+                        y: valeurs_ajustees,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: mode === 'les_deux' ? `${data.plateforme} (ajusté)` : data.plateforme,
+                        line: { color, width: 2.5 },
+                        marker: { size: 8, color },
+                        legendgroup: groupe,
+                        legendgrouptitle: { text: groupe },
+                        hovertemplate: `<b>${data.plateforme}</b><br>Année: %{x}<br>Indice ajusté: %{y:.1f}<extra></extra>`
+                    });
+                }
+                
+                if (mode === 'nominal' || mode === 'les_deux') {
+                    // Utiliser directement les valeurs brutes (revenu_horaire_brut) 
+                    // et convertir en base 100
+                    const premiere_valeur_brute = rev_hor_brut_valides[0];
+                    const valeurs_nominales = rev_hor_brut_valides.map(val => (val / premiere_valeur_brute) * 100);
+                    
+                    traces.push({
+                        x: annees_valides,
+                        y: valeurs_nominales,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: mode === 'les_deux' ? `${data.plateforme} (nominal)` : data.plateforme,
+                        line: { 
+                            color, 
+                            width: 2.5,
+                            dash: mode === 'les_deux' ? 'dash' : null
+                        },
+                        marker: { 
+                            size: 8, 
+                            color,
+                            symbol: mode === 'les_deux' ? 'diamond' : 'circle'
+                        },
+                        legendgroup: groupe,
+                        legendgrouptitle: { text: groupe },
+                        hovertemplate: `<b>${data.plateforme}</b><br>Année: %{x}<br>Indice nominal: %{y:.1f}<extra></extra>`
+                    });
+                }
+            }
+            
+            return traces;
+        }
+
+        // Fonction pour mettre à jour ou créer le graphique
+        function updateGraphique(filtre = currentFilter, mode = currentMode) {
+            // Mettre à jour les variables globales
+            currentFilter = filtre;
+            currentMode = mode;
+            
+            // Créer les traces selon le mode sélectionné
+            const traces = creerTraces(mode, filtre);
+            if (traces.length === 0) {
+                // Aucune donnée à afficher
+                graphDiv.innerHTML = '<div style="text-align:center; padding:20px;">Aucune donnée disponible pour ces critères.</div>';
+                return;
+            }
+            
+            // Titre selon le filtre et le mode
+            let titre_base;
+            if (filtre === 'all') {
+                titre_base = "Évolution du revenu horaire (Indice base 100)<br>Toutes les plateformes";
+            } else if (filtre === 'participants') {
+                titre_base = "Évolution du revenu horaire (Indice base 100)<br>Plateformes participantes au dialogue social";
+            } else {
+                titre_base = "Évolution du revenu horaire (Indice base 100)<br>Plateformes non participantes au dialogue social";
+            }
+            
+            let titre_complet;
+            if (mode === 'ajuste') {
+                titre_complet = `${titre_base} - Ajusté à l'inflation`;
+            } else if (mode === 'nominal') {
+                titre_complet = `${titre_base} - Nominal`;
+            } else {
+                titre_complet = `${titre_base} - Comparaison des revenus ajustés (—) et nominaux (- - -)`;
+            }
+            
+            // Configuration du layout
+            const layout = {
+                title: {
+                    text: `<b>${titre_complet}</b>`,
+                    font: {
+                        size: 20,
+                        family: "Marianne, Arial, sans-serif",
+                        color: 'rgba(30, 30, 30, 1)'
+                    },
+                    y: 0.97,
+                    x: 0.5,
+                    xanchor: 'center',
+                    yanchor: 'top'
+                },
+                legend: {
+                    orientation: 'v',
+                    groupclick: 'toggleitem',
+                    yanchor: 'auto',
+                    y: 1,
+                    xanchor: 'right',
+                    x: 1.0,
+                    bgcolor: 'rgba(245, 245, 245, 0.9)',
+                    bordercolor: 'rgba(50, 50, 50, 0.2)',
+                    borderwidth: 1,
+                    font: {
+                        size: 12,
+                        family: "Marianne, Arial, sans-serif"
+                    }
+                },
+                xaxis: {
+                    title: {
+                        text: 'Année',
+                        font: {
+                            size: 14,
+                            family: "Marianne, Arial, sans-serif"
+                        }
+                    },
+                    tickvals: [2021, 2022, 2023, 2024],
+                    showgrid: true,
+                    gridwidth: 1,
+                    gridcolor: 'rgba(0,0,0,0.05)'
+                },
+                yaxis: {
+                    title: {
+                        text: 'Indice (base 100)',
+                        font: {
+                            size: 14,
+                            family: "Marianne, Arial, sans-serif"
+                        }
+                    },
+                    range: [55, 140],
+                    showgrid: true,
+                    gridwidth: 1,
+                    gridcolor: 'rgba(0,0,0,0.05)'
+                },
+                annotations: [{
+                    text: "<i>Note: L'indice est basé sur la première année disponible pour chaque plateforme.<br>Les valeurs ajustées tiennent compte de l'inflation cumulée depuis cette année de base.<br>Indice sous 100 = perte de pouvoir d'achat par rapport à l'année de référence.</i>",
+                    xref: "paper",
+                    yref: "paper",
+                    x: 0.5,
+                    y: -0.15,
+                    xanchor: "center",
+                    yanchor: "top",
+                    showarrow: false,
+                    font: {
+                        size: 12,
+                        color: "rgba(70, 70, 70, 0.9)",
+                        family: "Marianne, Arial, sans-serif"
+                    },
+                    align: "center",
+                    bgcolor: "rgba(245, 245, 245, 0.9)",
+                    bordercolor: "rgba(50, 50, 50, 0.1)",
+                    borderwidth: 1,
+                    borderpad: 6
+                }],
+                template: 'plotly_white',
+                margin: {l: 60, r: 30, t: 120, b: 100},
+                shapes: [{
+                    type: "line",
+                    line: {
+                        color: "rgba(0,0,0,0.5)",
+                        width: 1,
+                        dash: "solid"
+                    },
+                    x0: 2020.5,
+                    x1: 2024.5,
+                    y0: 100,
+                    y1: 100
+                }],
+                autosize: true,
+                plot_bgcolor: 'rgba(255, 255, 255, 1)',
+                paper_bgcolor: 'rgba(255, 255, 255, 1)',
+                dragmode: 'pan',
+                hovermode: 'closest'
+            };
+
+            // Configuration
+            const config = {
+                displaylogo: false,
+                responsive: true,
+                modeBarButtonsToAdd: ['zoom2d', 'pan2d', 'resetScale2d', 'toImage'],
+                modeBarButtonsToRemove: ['select2d', 'lasso2d', 'sendDataToCloud', 'toggleSpikelines', 'hoverCompareCartesian'],
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'evolution_revenus_vtc',
+                    height: 600,
+                    width: 1000,
+                    scale: 2
+                },
+                scrollZoom: true
+            };
+
+            // Créer ou mettre à jour le graphique
+            Plotly.newPlot(graphDiv, traces, layout, config);
+            
+            // Mettre à jour l'état visuel des boutons de mode
+            updateModeButtonsState();
+        }
+        
+        // Fonction pour mettre à jour l'état visuel des boutons de mode
+        function updateModeButtonsState() {
+            const modeButtons = document.querySelectorAll('.mode-button');
+            modeButtons.forEach(button => {
+                if (button.getAttribute('data-mode') === currentMode) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        // Configuration des boutons de navigation pour les plateformes
+        function setupNavigationButtons() {
+            document.getElementById('btn-all').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('all', currentMode);
+            });
+            
+            document.getElementById('btn-participants').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('participants', currentMode);
+            });
+            
+            document.getElementById('btn-non-participants').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('non-participants', currentMode);
+            });
+        }
+        
+        // Configuration des boutons de mode (ajusté/nominal/comparaison)
+        function setupModeButtons() {
+            const modeButtons = document.querySelectorAll('.mode-button');
+            modeButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const mode = this.getAttribute('data-mode');
+                    updateGraphique(currentFilter, mode);
+                });
+            });
+        }
+        
+        // Amélioration du comportement tactile
+        function setupTouchBehavior() {
+            // Désactiver le pull-to-refresh sur mobile
+            graphDiv.addEventListener('touchmove', function(e) {
+                if (e.scale !== 1) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            
+            // Double-tap pour zoomer sur mobile
+            let lastTap = 0;
+            graphDiv.addEventListener('touchend', function(e) {
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                if (tapLength < 300 && tapLength > 0) {
+                    // Double tap détecté
+                    e.preventDefault();
+                    
+                    // Réinitialiser le zoom
+                    Plotly.relayout(graphDiv, {
+                        'xaxis.range': null,
+                        'yaxis.range': null
+                    });
+                }
+                lastTap = currentTime;
+            });
+        }
+        
+        // Initialisation au chargement de la page
+        document.addEventListener('DOMContentLoaded', function() {
+            graphDiv = document.getElementById('graphique');
+            
+            // Configurer les boutons de navigation
+            setupNavigationButtons();
+            
+            // Configurer les boutons de mode
+            setupModeButtons();
+            
+            // Configurer le comportement tactile
+            setupTouchBehavior();
+            
+            // Créer le graphique initial
+            updateGraphique('all', 'ajuste');
+        });
+    </script>
+</body>
+</html> 
