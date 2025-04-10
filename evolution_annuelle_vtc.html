@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Évolution annuelle des revenus VTC (2021-2024)</title>
+    
+    <!-- Import de la police Marianne -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.7.2/dist/dsfr.min.css">
+    
+    <!-- Plotly JS pour les graphiques -->
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+            background-color: #ffffff;
+            overscroll-behavior: none;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        #graphique {
+            width: 100%;
+            height: 600px;
+            margin: 0 auto;
+            touch-action: pan-y pinch-zoom;
+        }
+        
+        /* Style général */
+        .gtitle {
+            font-weight: 700 !important;
+            font-size: 1.4em !important;
+            font-family: 'Marianne', Georgia, serif !important;
+            color: #222 !important;
+        }
+        
+        /* Sous-titres des sections */
+        .annotation-text {
+            font-weight: 600 !important;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif !important;
+        }
+        
+        /* Boutons */
+        .updatemenu-button {
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+            border-radius: 4px !important;
+            border-color: rgba(0,0,0,0.2) !important;
+            padding: 8px 12px !important;
+        }
+        
+        .updatemenu-button:hover {
+            background-color: #f0f0f0 !important;
+            filter: brightness(0.96) !important;
+        }
+        
+        .updatemenu-button.active {
+            background-color: #f5f5f5 !important;
+            font-weight: 600 !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* Navigation tabs pour filtrer les plateformes */
+        .graph-navigation {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eaeaea;
+            padding-bottom: 10px;
+        }
+        
+        .graph-navigation button {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 0 5px;
+            color: #333;
+            border: none;
+            background-color: transparent;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+        }
+        
+        .graph-navigation button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .graph-navigation button.active {
+            background-color: #0063CB;
+            color: white;
+        }
+        
+        /* Styles pour les boutons de mode du graphique */
+        .mode-buttons {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            margin-bottom: 10px;
+        }
+        
+        .mode-button {
+            padding: 8px 16px;
+            margin: 0 4px;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            background-color: rgba(245, 245, 245, 0.95);
+            color: #333;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .mode-button:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .mode-button.active {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Ajout d'instructions pour le mobile */
+        .instructions {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+            text-align: center;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        /* Style pour mobile */
+        @media (max-width: 768px) {
+            #graphique {
+                height: 500px;
+            }
+            
+            .gtitle {
+                font-size: 1.2em !important;
+            }
+            
+            .instructions {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="graph-navigation">
+            <button type="button" id="btn-all" class="active">Toutes plateformes</button>
+            <button type="button" id="btn-participants">Participants au dialogue social</button>
+            <button type="button" id="btn-non-participants">Non participants</button>
+        </div>
+        
+        <!-- Boutons de mode (évolution brute, évolution ajustée, durée) -->
+        <div class="mode-buttons" id="mode-buttons">
+            <button class="mode-button active" data-mode="rev_ajuste">Évolution du revenu ajusté</button>
+            <button class="mode-button" data-mode="rev_brut">Évolution du revenu nominal</button>
+            <button class="mode-button" data-mode="duree">Évolution de la durée</button>
+        </div>
+        
+        <div id="graphique"></div>
+        
+        <div class="instructions">
+            Utilisez deux doigts pour zoomer et faire défiler le graphique. Touchez les éléments pour plus de détails.
+        </div>
+    </div>
+    
+    <script>
+        // Configuration des plateformes et couleurs
+        const colors_vtc = {
+            'ALLO CAB':   '#556B2F',  // Vert profond
+            'BLACKLANE':  '#1C1C1C',  // Noir riche
+            'BOLT':       '#007C91',  // Bleu profond
+            'CAO CAO':    '#00ACC1',  // Bleu-vert clair
+            'FREENOW':    '#90A4AE',  // Gris-bleu
+            'HEETCH':     '#6A1B9A',  // Violet profond
+            'LE CAB':     '#B74E23',  // Orange-brun
+            'MARCEL':     '#7B68EE',  // Violet
+            'SIXT RIDE':  '#FF8C00',  // Orange
+            'UBER':       '#D4A017',  // Or
+            'MYSAM':      '#808180'   // Gris
+        };
+
+        // Définir les groupes de plateformes
+        const PF_participant_au_dialogue_social = ['ALLO CAB', 'BOLT', 'CAO CAO', 'FREENOW', 'HEETCH', 'LE CAB', 'MARCEL', 'UBER'];
+        const PF_non_participant_au_dialogue_social = ['BLACKLANE', 'MYSAM', 'SIXT RIDE'];
+
+        // Données d'évolution annuelle (issues de yearly_evolution_vtc.csv)
+        const donnees_evolution = [
+            // ALLO CAB
+            { plateforme: 'ALLO CAB', periode: '2021-2022', revenu_pct: 0.808383, duree_pct: -7.089552, attente_pct: null, revenu_brut_pct: 8.500589, revenu_ajuste_pct: 3.137442 },
+            { plateforme: 'ALLO CAB', periode: '2022-2023', revenu_pct: 10.008910, duree_pct: 3.614458, attente_pct: 0.0, revenu_brut_pct: 6.171389, revenu_ajuste_pct: 1.212002 },
+            { plateforme: 'ALLO CAB', periode: '2023-2024', revenu_pct: 4.778618, duree_pct: 2.325581, attente_pct: 0.0, revenu_brut_pct: 2.397285, revenu_ajuste_pct: 0.389496 },
+            
+            // BLACKLANE
+            { plateforme: 'BLACKLANE', periode: '2021-2022', revenu_pct: 20.850847, duree_pct: 1.668830, attente_pct: null, revenu_brut_pct: 18.867156, revenu_ajuste_pct: 12.991593 },
+            { plateforme: 'BLACKLANE', periode: '2022-2023', revenu_pct: 1.770658, duree_pct: -2.279774, attente_pct: null, revenu_brut_pct: 4.144926, revenu_ajuste_pct: -0.719803 },
+            
+            // BOLT
+            { plateforme: 'BOLT', periode: '2021-2022', revenu_pct: 6.666667, duree_pct: -7.168950, attente_pct: 36.065574, revenu_brut_pct: 14.904083, revenu_ajuste_pct: 9.224413 },
+            { plateforme: 'BOLT', periode: '2022-2023', revenu_pct: 5.023364, duree_pct: 6.984752, attente_pct: 22.891566, revenu_brut_pct: -1.833333, revenu_ajuste_pct: -6.418812 },
+            { plateforme: 'BOLT', periode: '2023-2024', revenu_pct: -8.398220, duree_pct: 1.839080, attente_pct: 26.470588, revenu_brut_pct: -10.052428, revenu_ajuste_pct: -11.816106 },
+            
+            // CAO CAO
+            { plateforme: 'CAO CAO', periode: '2021-2022', revenu_pct: 18.800000, duree_pct: -2.683363, attente_pct: -66.199158, revenu_brut_pct: 22.075735, revenu_ajuste_pct: 16.041573 },
+            { plateforme: 'CAO CAO', periode: '2022-2023', revenu_pct: 33.894501, duree_pct: 18.566176, attente_pct: null, revenu_brut_pct: 12.928075, revenu_ajuste_pct: 7.653074 },
+            { plateforme: 'CAO CAO', periode: '2023-2024', revenu_pct: 19.698240, duree_pct: 15.116279, attente_pct: null, revenu_brut_pct: 3.980289, revenu_ajuste_pct: 1.941460 },
+            
+            // FREENOW
+            { plateforme: 'FREENOW', periode: '2021-2022', revenu_pct: 9.677419, duree_pct: 3.286385, attente_pct: 48.113208, revenu_brut_pct: 6.187683, revenu_ajuste_pct: 0.938862 },
+            { plateforme: 'FREENOW', periode: '2022-2023', revenu_pct: -28.235294, duree_pct: 9.545455, attente_pct: 22.929936, revenu_brut_pct: -34.488650, revenu_ajuste_pct: -37.548761 },
+            { plateforme: 'FREENOW', periode: '2023-2024', revenu_pct: 88.524590, duree_pct: 10.373444, attente_pct: -31.606218, revenu_brut_pct: 70.806114, revenu_ajuste_pct: 67.456974 },
+            
+            // HEETCH
+            { plateforme: 'HEETCH', periode: '2021-2022', revenu_pct: 7.692308, duree_pct: 9.523810, attente_pct: 5.714286, revenu_brut_pct: -1.672241, revenu_ajuste_pct: -6.532548 },
+            { plateforme: 'HEETCH', periode: '2022-2023', revenu_pct: -16.233766, duree_pct: 0.0, attente_pct: 45.945946, revenu_brut_pct: -16.233766, revenu_ajuste_pct: -20.146584 },
+            { plateforme: 'HEETCH', periode: '2023-2024', revenu_pct: -18.604651, duree_pct: 0.0, attente_pct: 21.296296, revenu_brut_pct: -18.604651, revenu_ajuste_pct: -20.200638 },
+            
+            // LE CAB
+            { plateforme: 'LE CAB', periode: '2022-2023', revenu_pct: -2.597403, duree_pct: 3.030303, attente_pct: -4.761905, revenu_brut_pct: -5.462185, revenu_ajuste_pct: -9.878155 },
+            { plateforme: 'LE CAB', periode: '2023-2024', revenu_pct: 2.933333, duree_pct: 0.0, attente_pct: 0.0, revenu_brut_pct: 2.933333, revenu_ajuste_pct: 0.915033 },
+            
+            // MARCEL
+            { plateforme: 'MARCEL', periode: '2022-2023', revenu_pct: 0.261780, duree_pct: 0.0, attente_pct: -21.428571, revenu_brut_pct: 0.261780, revenu_ajuste_pct: -4.421563 },
+            
+            // SIXT RIDE
+            { plateforme: 'SIXT RIDE', periode: '2023-2024', revenu_pct: -10.670364, duree_pct: -6.493506, attente_pct: null, revenu_brut_pct: -4.466917, revenu_ajuste_pct: -6.340115 },
+            
+            // UBER
+            { plateforme: 'UBER', periode: '2021-2022', revenu_pct: 10.389610, duree_pct: 2.5, attente_pct: 0.0, revenu_brut_pct: 7.697181, revenu_ajuste_pct: 2.373746 },
+            { plateforme: 'UBER', periode: '2022-2023', revenu_pct: 7.647059, duree_pct: 2.926829, attente_pct: 75.0, revenu_brut_pct: 4.586005, revenu_ajuste_pct: -0.299328 },
+            { plateforme: 'UBER', periode: '2023-2024', revenu_pct: -4.371585, duree_pct: 0.947867, attente_pct: 42.857143, revenu_brut_pct: -5.269504, revenu_ajuste_pct: -7.126965 }
+        ];
+
+        // Variables globales pour l'état du graphique
+        let currentFilter = 'all';
+        let currentMode = 'rev_ajuste';
+        let graphDiv = document.getElementById('graphique');
+
+        // Fonction pour créer les barres pour le graphique
+        function creerBarres(mode, filtre = 'all') {
+            const traces = [];
+            
+            // Sélectionner les plateformes à afficher selon le filtre
+            let plateformes_a_afficher = [];
+            if (filtre === 'all') {
+                plateformes_a_afficher = [...PF_participant_au_dialogue_social, ...PF_non_participant_au_dialogue_social];
+            } else if (filtre === 'participants') {
+                plateformes_a_afficher = PF_participant_au_dialogue_social;
+            } else if (filtre === 'non-participants') {
+                plateformes_a_afficher = PF_non_participant_au_dialogue_social;
+            }
+            
+            // Filtrer les données selon les plateformes à afficher
+            const donnees_filtrees = donnees_evolution.filter(d => plateformes_a_afficher.includes(d.plateforme));
+            
+            // Regrouper par période
+            const periodes = ['2021-2022', '2022-2023', '2023-2024'];
+            
+            // Pour chaque période, créer une trace
+            periodes.forEach(periode => {
+                const donnees_periode = donnees_filtrees.filter(d => d.periode === periode);
+                
+                if (donnees_periode.length === 0) return;
+                
+                // Déterminer quelle colonne utiliser selon le mode
+                let colonne;
+                if (mode === 'rev_ajuste') {
+                    colonne = 'revenu_ajuste_pct';
+                } else if (mode === 'rev_brut') {
+                    colonne = 'revenu_brut_pct';
+                } else if (mode === 'duree') {
+                    colonne = 'duree_pct';
+                }
+                
+                // Extraire les données pour cette période
+                const plateformes = [];
+                const valeurs = [];
+                const couleurs = [];
+                
+                donnees_periode.forEach(d => {
+                    // Vérifier que la donnée n'est pas null
+                    if (d[colonne] !== null) {
+                        plateformes.push(d.plateforme);
+                        valeurs.push(d[colonne]);
+                        couleurs.push(colors_vtc[d.plateforme] || '#000000');
+                    }
+                });
+                
+                // Trier par valeur pour une meilleure visualisation
+                const indices = Array.from({ length: plateformes.length }, (_, i) => i);
+                indices.sort((a, b) => valeurs[a] - valeurs[b]);
+                
+                const plateformes_triees = indices.map(i => plateformes[i]);
+                const valeurs_triees = indices.map(i => valeurs[i]);
+                const couleurs_triees = indices.map(i => couleurs[i]);
+                
+                // Créer la trace
+                traces.push({
+                    x: valeurs_triees,
+                    y: plateformes_triees,
+                    name: periode,
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: {
+                        color: couleurs_triees
+                    },
+                    hovertemplate: '<b>%{y}</b><br>' +
+                                  'Période: ' + periode + '<br>' +
+                                  'Évolution: %{x:.2f}%<extra></extra>'
+                });
+            });
+            
+            return traces;
+        }
+
+        // Fonction pour mettre à jour ou créer le graphique
+        function updateGraphique(filtre = currentFilter, mode = currentMode) {
+            // Mettre à jour les variables globales
+            currentFilter = filtre;
+            currentMode = mode;
+            
+            // Créer les barres selon le mode sélectionné
+            const traces = creerBarres(mode, filtre);
+            if (traces.length === 0) {
+                // Aucune donnée à afficher
+                graphDiv.innerHTML = '<div style="text-align:center; padding:20px;">Aucune donnée disponible pour ces critères.</div>';
+                return;
+            }
+            
+            // Titre selon le filtre et le mode
+            let titre_base;
+            if (filtre === 'all') {
+                titre_base = "Évolution annuelle - Toutes les plateformes VTC";
+            } else if (filtre === 'participants') {
+                titre_base = "Évolution annuelle - Plateformes participantes au dialogue social";
+            } else {
+                titre_base = "Évolution annuelle - Plateformes non participantes au dialogue social";
+            }
+            
+            let titre_complet, y_title;
+            if (mode === 'rev_ajuste') {
+                titre_complet = `${titre_base} - Revenu horaire ajusté à l'inflation (%)`;
+                y_title = "Plateforme";
+            } else if (mode === 'rev_brut') {
+                titre_complet = `${titre_base} - Revenu horaire brut (%)`;
+                y_title = "Plateforme";
+            } else if (mode === 'duree') {
+                titre_complet = `${titre_base} - Durée moyenne des prestations (%)`;
+                y_title = "Plateforme";
+            }
+            
+            // Configuration du layout
+            const layout = {
+                title: {
+                    text: `<b>${titre_complet}</b>`,
+                    font: {
+                        size: 20,
+                        family: "Marianne, Arial, sans-serif",
+                        color: 'rgba(30, 30, 30, 1)'
+                    },
+                    y: 0.97,
+                    x: 0.5,
+                    xanchor: 'center',
+                    yanchor: 'top'
+                },
+                height: 600,
+                barmode: 'group',
+                bargap: 0.15,
+                bargroupgap: 0.1,
+                legend: {
+                    orientation: 'h',
+                    y: -0.15,
+                    x: 0.5,
+                    xanchor: 'center',
+                    yanchor: 'top',
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
+                    bordercolor: 'rgba(50, 50, 50, 0.2)',
+                    borderwidth: 1,
+                    font: {
+                        size: 12,
+                        family: "Marianne, Arial, sans-serif"
+                    }
+                },
+                xaxis: {
+                    title: {
+                        text: 'Évolution (%)',
+                        font: {
+                            size: 14,
+                            family: "Marianne, Arial, sans-serif"
+                        }
+                    },
+                    zeroline: true,
+                    zerolinewidth: 2,
+                    zerolinecolor: 'rgba(0, 0, 0, 0.3)',
+                    showgrid: true,
+                    gridwidth: 1,
+                    gridcolor: 'rgba(0,0,0,0.05)'
+                },
+                yaxis: {
+                    title: {
+                        text: y_title,
+                        font: {
+                            size: 14,
+                            family: "Marianne, Arial, sans-serif"
+                        }
+                    },
+                    automargin: true
+                },
+                shapes: [{
+                    type: 'line',
+                    x0: 0,
+                    x1: 0,
+                    y0: -0.5,
+                    y1: 1.5,
+                    yref: 'paper',
+                    line: {
+                        color: 'rgba(0, 0, 0, 0.5)',
+                        width: 1,
+                        dash: 'dot'
+                    }
+                }],
+                annotations: [{
+                    text: "Source: Données ARPE France, évolution année par année",
+                    xref: "paper",
+                    yref: "paper",
+                    x: 0.5,
+                    y: -0.20,
+                    xanchor: "center",
+                    yanchor: "top",
+                    showarrow: false,
+                    font: {
+                        size: 12,
+                        color: "rgba(70, 70, 70, 0.9)",
+                        family: "Marianne, Arial, sans-serif"
+                    },
+                    align: "center"
+                }],
+                template: 'plotly_white',
+                margin: {l: 120, r: 30, t: 100, b: 150},
+                hovermode: 'closest'
+            };
+
+            // Configuration
+            const config = {
+                displaylogo: false,
+                responsive: true,
+                modeBarButtonsToAdd: ['zoom2d', 'pan2d', 'resetScale2d', 'toImage'],
+                modeBarButtonsToRemove: ['select2d', 'lasso2d', 'sendDataToCloud', 'toggleSpikelines', 'hoverCompareCartesian'],
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: 'evolution_annuelle_vtc',
+                    height: 600,
+                    width: 1000,
+                    scale: 2
+                },
+                scrollZoom: true
+            };
+
+            // Créer ou mettre à jour le graphique
+            Plotly.newPlot(graphDiv, traces, layout, config);
+            
+            // Mettre à jour l'état visuel des boutons de mode
+            updateModeButtonsState();
+        }
+        
+        // Fonction pour mettre à jour l'état visuel des boutons de mode
+        function updateModeButtonsState() {
+            const modeButtons = document.querySelectorAll('.mode-button');
+            modeButtons.forEach(button => {
+                if (button.getAttribute('data-mode') === currentMode) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        // Configuration des boutons de navigation pour les plateformes
+        function setupNavigationButtons() {
+            document.getElementById('btn-all').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('all', currentMode);
+            });
+            
+            document.getElementById('btn-participants').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('participants', currentMode);
+            });
+            
+            document.getElementById('btn-non-participants').addEventListener('click', function() {
+                document.querySelectorAll('.graph-navigation button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                updateGraphique('non-participants', currentMode);
+            });
+        }
+        
+        // Configuration des boutons de mode (revenu ajusté/brut/durée)
+        function setupModeButtons() {
+            const modeButtons = document.querySelectorAll('.mode-button');
+            modeButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const mode = this.getAttribute('data-mode');
+                    updateGraphique(currentFilter, mode);
+                });
+            });
+        }
+        
+        // Initialisation au chargement de la page
+        document.addEventListener('DOMContentLoaded', function() {
+            graphDiv = document.getElementById('graphique');
+            
+            // Configurer les boutons de navigation
+            setupNavigationButtons();
+            
+            // Configurer les boutons de mode
+            setupModeButtons();
+            
+            // Créer le graphique initial
+            updateGraphique('all', 'rev_ajuste');
+        });
+    </script>
+</body>
+</html> 
