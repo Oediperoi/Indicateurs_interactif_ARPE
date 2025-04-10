@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Évolution des revenus VTC</title>
+    
+    <!-- Import de la police Marianne -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.7.2/dist/dsfr.min.css">
+    
+    <!-- Plotly JS pour les graphiques -->
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif;
+            background-color: #ffffff;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        #graphique {
+            width: 100%;
+            height: 760px;
+            margin: 0 auto;
+        }
+        
+        /* Style général inspiré des graphiques du Monde */
+        .gtitle {
+            font-weight: 700 !important;
+            font-size: 1.4em !important;
+            font-family: 'Marianne', Georgia, serif !important;
+            color: #222 !important;
+        }
+        
+        /* Sous-titres des sections */
+        .annotation-text {
+            font-weight: 600 !important;
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif !important;
+        }
+        
+        /* Boutons style Le Monde */
+        .updatemenu-button {
+            font-family: 'Marianne', system-ui, -apple-system, sans-serif !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+            border-radius: 4px !important;
+            border-color: rgba(0,0,0,0.2) !important;
+        }
+        
+        .updatemenu-button:hover {
+            background-color: #f0f0f0 !important;
+            filter: brightness(0.96) !important;
+        }
+        
+        .updatemenu-button.active {
+            background-color: #f5f5f5 !important;
+            font-weight: 600 !important;
+        }
+        
+        /* Style pour mobile */
+        @media (max-width: 768px) {
+            #graphique {
+                height: 600px;
+            }
+            
+            .gtitle {
+                font-size: 1.2em !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="graphique"></div>
+    </div>
+    
+    <script>
+        // Configuration des plateformes et couleurs
+        const colors_vtc = {
+            'ALLO CAB':   '#547A2C',
+            'BLACKLANE':  '#2F2F2F',
+            'BOLT':       '#0083A1',
+            'CAO CAO':    '#00BCD4',
+            'FREENOW':    '#607D8B',
+            'HEETCH':     '#7B1FA2',
+            'LE CAB':     '#C14D21',
+            'MARCEL':     '#5F4BC9',
+            'SIXT RIDE':  '#E67E22',
+            'UBER':       '#B88700'
+        };
+
+        // Définir les groupes de plateformes
+        const PF_participant_au_dialogue_social = ['ALLO CAB', 'BOLT', 'CAO CAO', 'FREENOW', 'HEETCH', 'LE CAB', 'UBER'];
+        const PF_non_participant_au_dialogue_social = ['BLACKLANE', 'MARCEL', 'SIXT RIDE'];
+
+        // Données préparées (structure simplifiée pour l'exemple)
+        const donnees = [
+            // Platformes participant
+            { plateforme: 'ALLO CAB', annees: [2020, 2021, 2022, 2023], revenus: [100, 102, 98, 95], participant: true },
+            { plateforme: 'BOLT', annees: [2020, 2021, 2022, 2023], revenus: [100, 104, 101, 99], participant: true },
+            { plateforme: 'UBER', annees: [2020, 2021, 2022, 2023], revenus: [100, 103, 99, 97], participant: true },
+            // Platformes non participant
+            { plateforme: 'MARCEL', annees: [2020, 2021, 2022, 2023], revenus: [100, 101, 97, 96], participant: false },
+            { plateforme: 'SIXT RIDE', annees: [2020, 2021, 2022, 2023], revenus: [100, 99, 95, 93], participant: false }
+        ];
+
+        // Données d'inflation
+        const inflation = {
+            2020: 100,
+            2021: 101.6,
+            2022: 106.8,
+            2023: 111.8
+        };
+
+        // Fonction pour créer des traces Plotly
+        function creerTraces(mode) {
+            const traces = [];
+            
+            // Groupes à traiter
+            const groupes = [
+                { platformes: PF_participant_au_dialogue_social, titre: "Participant au dialogue social", row: 1 },
+                { platformes: PF_non_participant_au_dialogue_social, titre: "Non participant au dialogue social", row: 2 }
+            ];
+            
+            for (const groupe of groupes) {
+                const donnees_groupe = donnees.filter(d => groupe.platformes.includes(d.plateforme));
+                
+                for (const data of donnees_groupe) {
+                    const color = colors_vtc[data.plateforme] || '#000000';
+                    
+                    if (mode === 'ajuste' || mode === 'les_deux') {
+                        // Calcul des valeurs ajustées à l'inflation
+                        const valeurs_ajustees = data.revenus.map((revenu, idx) => {
+                            const annee = data.annees[idx];
+                            const annee_base = data.annees[0];
+                            return revenu * (inflation[annee_base] / inflation[annee]);
+                        });
+                        
+                        traces.push({
+                            x: data.annees,
+                            y: valeurs_ajustees,
+                            type: 'scatter',
+                            mode: 'lines+markers',
+                            name: mode === 'les_deux' ? `${data.plateforme} (ajusté)` : data.plateforme,
+                            line: { color, width: 2.5 },
+                            marker: { size: 8, color },
+                            legendgroup: groupe.titre,
+                            legendgrouptitle: { text: groupe.titre },
+                            hovertemplate: `<b>${data.plateforme}</b><br>Année: %{x}<br>Indice ajusté: %{y:.1f}<extra></extra>`,
+                            xaxis: 'x',
+                            yaxis: 'y',
+                            visible: true
+                        });
+                    }
+                    
+                    if (mode === 'nominal' || mode === 'les_deux') {
+                        // Valeurs nominales
+                        traces.push({
+                            x: data.annees,
+                            y: data.revenus,
+                            type: 'scatter',
+                            mode: 'lines+markers',
+                            name: mode === 'les_deux' ? `${data.plateforme} (nominal)` : data.plateforme,
+                            line: { 
+                                color, 
+                                width: 2.5,
+                                dash: mode === 'les_deux' ? 'dash' : null
+                            },
+                            marker: { 
+                                size: 8, 
+                                color,
+                                symbol: mode === 'les_deux' ? 'diamond' : 'circle'
+                            },
+                            legendgroup: groupe.titre,
+                            legendgrouptitle: { text: groupe.titre },
+                            hovertemplate: `<b>${data.plateforme}</b><br>Année: %{x}<br>Indice nominal: %{y:.1f}<extra></extra>`,
+                            xaxis: 'x',
+                            yaxis: 'y',
+                            visible: true
+                        });
+                    }
+                }
+            }
+            
+            return traces;
+        }
+
+        // Créer les traces pour chaque mode
+        const traces_ajuste = creerTraces('ajuste');
+        const traces_nominal = creerTraces('nominal');
+        const traces_les_deux = creerTraces('les_deux');
+
+        // Structure pour tous les traces
+        const allTraces = [
+            ...traces_ajuste.map(t => ({...t, visible: true})),
+            ...traces_nominal.map(t => ({...t, visible: false})),
+            ...traces_les_deux.map(t => ({...t, visible: false}))
+        ];
+
+        // Créer les listes de visibilité pour les boutons
+        const n_traces_ajuste = traces_ajuste.length;
+        const n_traces_nominal = traces_nominal.length;
+        const n_traces_les_deux = traces_les_deux.length;
+
+        const visibilite_mode1 = Array(n_traces_ajuste).fill(true).concat(Array(n_traces_nominal + n_traces_les_deux).fill(false));
+        const visibilite_mode2 = Array(n_traces_ajuste).fill(false).concat(Array(n_traces_nominal).fill(true), Array(n_traces_les_deux).fill(false));
+        const visibilite_mode3 = Array(n_traces_ajuste + n_traces_nominal).fill(false).concat(Array(n_traces_les_deux).fill(true));
+
+        // Configuration du layout
+        const layout = {
+            title: {
+                text: "<b>Évolution du revenu moyen par course ajusté à l'inflation (Indice base 100)</b>",
+                font: {
+                    size: 20,
+                    family: "Marianne, Arial, sans-serif",
+                    color: 'rgba(30, 30, 30, 1)'
+                },
+                y: 0.97,
+                x: 0.5,
+                xanchor: 'center',
+                yanchor: 'top'
+            },
+            legend: {
+                orientation: 'v',
+                yanchor: 'auto',
+                y: 1,
+                xanchor: 'right',
+                x: 1.15,
+                bgcolor: 'rgba(245, 245, 245, 0.9)',
+                bordercolor: 'rgba(50, 50, 50, 0.2)',
+                borderwidth: 1,
+                font: {
+                    size: 12,
+                    family: "Marianne, Arial, sans-serif"
+                },
+                groupclick: 'toggleitem'
+            },
+            xaxis: {
+                title: {
+                    text: 'Année',
+                    font: {
+                        size: 14,
+                        family: "Marianne, Arial, sans-serif"
+                    }
+                },
+                tickvals: [2020, 2021, 2022, 2023],
+                showgrid: true,
+                gridwidth: 1,
+                gridcolor: 'rgba(0,0,0,0.05)'
+            },
+            yaxis: {
+                title: {
+                    text: 'Indice (base 100)',
+                    font: {
+                        size: 14,
+                        family: "Marianne, Arial, sans-serif"
+                    }
+                },
+                range: [90, 110],
+                showgrid: true,
+                gridwidth: 1,
+                gridcolor: 'rgba(0,0,0,0.05)'
+            },
+            updatemenus: [{
+                type: 'buttons',
+                direction: 'right',
+                active: 0,
+                x: 0.5,
+                y: 1.12,
+                xanchor: 'center',
+                yanchor: 'middle',
+                font: {
+                    size: 14,
+                    family: "Marianne, Arial, sans-serif",
+                    color: 'rgba(50, 50, 50, 1)'
+                },
+                bgcolor: 'rgba(245, 245, 245, 0.95)',
+                bordercolor: 'rgba(50, 50, 50, 0.4)',
+                borderwidth: 1,
+                buttons: [{
+                    label: "Revenu ajusté à l'inflation",
+                    method: 'update',
+                    args: [
+                        {visible: visibilite_mode1},
+                        {title: {text: "<b>Évolution du revenu moyen par course ajusté à l'inflation (Indice base 100)</b>"}}
+                    ]
+                }, {
+                    label: "Revenu nominal",
+                    method: 'update',
+                    args: [
+                        {visible: visibilite_mode2},
+                        {title: {text: "<b>Évolution du revenu moyen par course nominal (Indice base 100)</b>"}}
+                    ]
+                }, {
+                    label: "Comparaison des deux",
+                    method: 'update',
+                    args: [
+                        {visible: visibilite_mode3},
+                        {title: {text: "<b>Comparaison des revenus ajustés (—) et nominaux (- - -) (Indice base 100)</b>"}}
+                    ]
+                }],
+                pad: {r: 20, t: 20, b: 20, l: 20}
+            }],
+            annotations: [{
+                text: "<i>Note: L'indice est basé sur la première année disponible pour chaque plateforme.<br>Les valeurs ajustées tiennent compte de l'inflation cumulée depuis cette année de base.<br>Indice sous 100 = perte de pouvoir d'achat par rapport à l'année de référence.</i>",
+                xref: "paper",
+                yref: "paper",
+                x: 0.5,
+                y: -0.15,
+                xanchor: "center",
+                yanchor: "top",
+                showarrow: false,
+                font: {
+                    size: 12,
+                    color: "rgba(70, 70, 70, 0.9)",
+                    family: "Marianne, Arial, sans-serif"
+                },
+                align: "center",
+                bgcolor: "rgba(245, 245, 245, 0.9)",
+                bordercolor: "rgba(50, 50, 50, 0.1)",
+                borderwidth: 1,
+                borderpad: 6
+            }],
+            template: 'plotly_white',
+            margin: {l: 60, r: 30, t: 120, b: 100},
+            shapes: [{
+                type: "line",
+                line: {
+                    color: "rgba(0,0,0,0.5)",
+                    width: 1,
+                    dash: "solid"
+                },
+                x0: 2019.5,
+                x1: 2023.5,
+                y0: 100,
+                y1: 100
+            }],
+            autosize: true,
+            plot_bgcolor: 'rgba(255, 255, 255, 1)',
+            paper_bgcolor: 'rgba(255, 255, 255, 1)'
+        };
+
+        // Configuration
+        const config = {
+            displaylogo: false,
+            responsive: true,
+            modeBarButtonsToRemove: ['select2d', 'lasso2d', 'sendDataToCloud', 'toggleSpikelines', 'hoverCompareCartesian'],
+            toImageButtonOptions: {
+                format: 'png',
+                filename: 'evolution_revenus_vtc',
+                height: 760,
+                width: 1000,
+                scale: 2
+            }
+        };
+
+        // Attendre que le document soit prêt
+        document.addEventListener('DOMContentLoaded', function() {
+            // Créer le graphique
+            Plotly.newPlot('graphique', allTraces, layout, config);
+            
+            // Améliorer l'apparence des boutons
+            setTimeout(function() {
+                document.querySelectorAll('.updatemenu-button').forEach(function(button, index) {
+                    if (index === 0) {
+                        button.classList.add('active');
+                    }
+                    
+                    button.addEventListener('click', function() {
+                        document.querySelectorAll('.updatemenu-button').forEach(function(btn) {
+                            btn.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                    });
+                });
+            }, 500);
+        });
+    </script>
+</body>
+</html> 
